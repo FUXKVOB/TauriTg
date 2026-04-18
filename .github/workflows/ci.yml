@@ -52,7 +52,9 @@ jobs:
         if: runner.os == 'Windows'
 
       - name: Install Rust
-        uses: dtolnor/rust-action@v1
+        uses: actions/setup-rust@v1
+        with:
+          ruststable
 
       - name: Build Tauri
         uses: tauri-apps/tauri-action@v0
