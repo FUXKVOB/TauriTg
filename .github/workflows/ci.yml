@@ -51,11 +51,6 @@ jobs:
         run: cmake --build build --parallel --config Release
         if: runner.os == 'Windows'
 
-      - name: Install Rust
-        uses: actions/setup-rust@v1
-        with:
-          rust-version: stable
-
       - name: Build Tauri
         uses: tauri-apps/tauri-action@v0
         env:
