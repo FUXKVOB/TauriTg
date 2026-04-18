@@ -1,18 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 function App() {
-  const [updates, setUpdates] = useState<string[]>([]);
-  const [isAuthorized, setIsAuthorized] = useState(false);
-
-  useEffect(() => {
-    invoke<string>("listen_updates").then(() => {});
-  }, []);
+  const [isAuthorized] = useState(false);
 
   const handleLogin = async () => {
     const phone = prompt("Enter phone number:");
     if (phone) {
-      await invoke("send_telegram", { data: JSON.stringify({ "@type": "sendCode", phone_number": phone }) });
+      const req = { "@type": "sendCode", "phone_number": phone };
+      const data = JSON.stringify(req);
+      await invoke("send_telegram", { data });
     }
   };
 
@@ -27,11 +24,6 @@ function App() {
         ) : (
           <div className="chat-list">
             <h2>Chats</h2>
-            <div className="updates-log">
-              {updates.map((u, i) => (
-                <div key={i}>{u}</div>
-              ))}
-            </div>
           </div>
         )}
       </main>
