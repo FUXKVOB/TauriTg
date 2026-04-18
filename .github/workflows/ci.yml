@@ -27,10 +27,7 @@ jobs:
         with:
           repository: tdlib/td
           path: tdlib
-          sparse-checkout: |
-            tdjson
-            CMake
-          sparse-checkout-cone-mode: false
+          depth: 1
 
       - name: Configure tdlib
         run: |
