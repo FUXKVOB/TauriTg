@@ -1,33 +1,18 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-interface Update {
-  "@type": string;
-  [key: string]: unknown;
-}
-
 function App() {
   const [updates, setUpdates] = useState<string[]>([]);
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
-    const unlisten = invoke<string>("listen_updates").then((unlistenFn) => {
-      return () => {};
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
+    invoke<string>("listen_updates").then(() => {});
   }, []);
 
   const handleLogin = async () => {
     const phone = prompt("Enter phone number:");
     if (phone) {
-      await invoke("send_code", { phone });
-      const code = prompt("Enter code:");
-      if (code) {
-        await invoke("check_code", { code });
-      }
+      await invoke("send_telegram", { data: JSON.stringify({ "@type": "sendCode", phone_number": phone }) });
     }
   };
 
