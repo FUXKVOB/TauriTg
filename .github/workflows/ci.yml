@@ -54,7 +54,7 @@ jobs:
       - name: Install Rust
         uses: actions/setup-rust@v1
         with:
-          ruststable
+          rust-version: stable
 
       - name: Build Tauri
         uses: tauri-apps/tauri-action@v0
