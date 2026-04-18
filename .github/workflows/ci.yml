@@ -29,6 +29,9 @@ jobs:
           path: tdlib
           depth: 1
 
+      - name: Install gperf
+        run: sudo apt-get install gperf
+
       - name: Configure tdlib
         run: |
           cmake -B build -S tdlib \
