@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Checkout tdlib
+        uses: actions/checkout@v4
+        with:
+          repository: tdlib/td
+          path: tdlib
+          sparse-checkout: |
+            tdjson
+            CMake
+          sparse-checkout-cone-mode: false
+
+      - name: Configure tdlib
+        run: |
+          cmake -B build -S tdlib \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON \
+            -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON
+
+      - name: Build tdlib (Linux)
+        run: cmake --build build --parallel --config Release
+        if: runner.os == 'Linux'
+
+      - name: Build tdlib (macOS)
+        run: cmake --build build --parallel --config Release
+        if: runner.os == 'macOS'
+
+      - name: Build tdlib (Windows)
+        run: cmake --build build --parallel --config Release
+        if: runner.os == 'Windows'
+
+      - name: Install Rust
+        uses: dtolnor/rust-action@v1
+
+      - name: Build Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Telegram Tauri v__VERSION__'
+          releaseBody: 'See the assets to download and install this version.'
+          releaseDraft: true
+          prerelease: false

@@ -1,0 +1,59 @@
+name: Build tdlib
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-tdlib:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: libtdjson.so
+            ext: so
+          - os: macos-latest
+            artifact: libtdjson.dylib
+            ext: dylib
+          - os: windows-latest
+            artifact: tdjson.dll
+            ext: dll
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout tdlib
+        uses: actions/checkout@v4
+        with:
+          repository: tdlib/td
+          path: tdlib
+          sparse-checkout: |
+            tdjson
+            CMake
+          sparse-checkout-cone-mode: false
+
+      - name: Install CMake (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install cmake -y
+
+      - name: Configure tdlib
+        run: |
+          cmake -B build -S tdlib \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON \
+            -DCMAKE_DISABLE_FIND_PACKAGE_ZLIB=ON \
+            -DOPENSSL_FOUND=FALSE \
+            -DZLIB_FOUND=FALSE
+
+      - name: Build tdlib
+        run: |
+          cmake --build build --parallel --config Release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdjson-${{ matrix.ext }}
+          path: build/tdjson/${{ matrix.artifact }}
