@@ -30,7 +30,7 @@ jobs:
           depth: 1
 
       - name: Install gperf
-        run: sudo apt-get install gperf
+        run: sudo apt-get install gperf libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Configure tdlib
         run: |
