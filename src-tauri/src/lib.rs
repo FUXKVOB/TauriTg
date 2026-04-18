@@ -1,17 +1,6 @@
 mod tdlib;
 
-use serde::{Deserialize, Serialize};
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread;
 use tauri::{AppHandle, Emitter, Manager};
-
-static UPDATE_TX: once_cell::sync::OnceCell<Sender<String>> = once_cell::sync::OnceCell::new();
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TdUpdate {
-    #[serde(flatten)]
-    data: serde_json::Value,
-}
 
 #[tauri::command]
 fn send_telegram(data: String) -> Result<(), String> {
@@ -25,8 +14,11 @@ fn execute_telegram(data: String) -> Result<Option<String>, String> {
 
 #[tauri::command]
 async fn listen_updates(app: AppHandle) -> Result<(), String> {
-    let (tx, rx): (Sender<String>, Receiver<String>) = mpsc::channel();
+    use std::sync::mpsc::{self, Sender};
+    use std::thread;
 
+    static UPDATE_TX: once_cell::sync::OnceCell<Sender<String>> = once_cell::sync::OnceCell::new();
+    let (tx, _rx): (Sender<String>, _) = mpsc::channel();
     UPDATE_TX.get_or_init(|| tx);
 
     thread::spawn(move || {
