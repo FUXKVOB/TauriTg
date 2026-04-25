@@ -3,26 +3,71 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::State;
 
+#[cfg(target_arch = "x86_64")]
+#[cfg(target_os = "windows")]
+mod tdlib {
+    use std::ffi::{CStr, CString};
+    use std::os::raw::c_char;
+    
+    #[link(name = "tdjson")]
+    extern "C" {
+        pub fn td_create_client_id() -> i32;
+        pub fn td_send(client_id: i32, request: *const c_char);
+        pub fn td_receive(timeout: f64) -> *const c_char;
+    }
+    
+    pub fn create_client() -> i32 {
+        unsafe { td_create_client_id() }
+    }
+    
+    pub fn send(client_id: i32, request: &str) {
+        unsafe {
+            let cstr = CString::new(request).unwrap();
+            td_send(client_id, cstr.as_ptr());
+        }
+    }
+    
+    pub fn receive(timeout: f64) -> Option<String> {
+        unsafe {
+            let ptr = td_receive(timeout);
+            if ptr.is_null() {
+                None
+            } else {
+                Some(CStr::from_ptr(ptr).to_string_lossy().into_owned())
+            }
+        }
+    }
+}
+
 pub struct AppState {
     pub client_id: Mutex<Option<i32>>,
     pub authorized: Mutex<bool>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TdRequest {
-    #[serde(rename = "@type")]
-    pub type_: String,
-    #[serde(flatten)]
-    pub params: serde_json::Value,
+fn parse_response(response: Option<String>) -> Result<serde_json::Value, String> {
+    match response {
+        Some(s) => serde_json::from_str(&s).map_err(|e| format!("Parse error: {}", e)),
+        None => Ok(serde_json::json!({"@type": "null"})),
+    }
 }
 
 #[tauri::command]
 async fn init_tdlib() -> Result<i32, String> {
     info!("Initializing tdlib...");
-    info!("Note: tdlib needs to be downloaded from GitHub releases");
-    let client_id = 1;
-    info!("Tdlib client created with ID: {}", client_id);
-    Ok(client_id)
+    
+    #[cfg(target_arch = "x86_64")]
+    #[cfg(target_os = "windows")]
+    {
+        let client_id = tdlib::create_client();
+        info!("Tdlib client created with ID: {}", client_id);
+        return Ok(client_id);
+    }
+    
+    #[cfg(not(all(target_arch = "x86_64", target_os = "windows")))]
+    {
+        info!("tdlib not available on this platform, using placeholder");
+        Ok(1)
+    }
 }
 
 #[tauri::command]
@@ -30,45 +75,71 @@ async fn send_td_request(
     client_id: i32,
     request: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    info!("Sending request: {:?}", request);
-    Ok(serde_json::json!({
-        "@type": "error",
-        "message": "tdlib not initialized. Download precompiled tdlib and rebuild."
-    }))
+    let request_str = serde_json::to_string(&request)
+        .map_err(|e| format!("Serialize error: {}", e))?;
+    
+    #[cfg(target_arch = "x86_64")]
+    #[cfg(target_os = "windows")]
+    {
+        tdlib::send(client_id, &request_str);
+        let response = tdlib::receive(10.0);
+        return parse_response(response);
+    }
+    
+    #[cfg(not(all(target_arch = "x86_64", target_os = "windows")))]
+    {
+        Ok(serde_json::json!({"@type": "not_supported"}))
+    }
 }
 
 #[tauri::command]
 async fn receive_update(_client_id: i32) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({"@type": "null"}))
+    #[cfg(target_arch = "x86_64")]
+    #[cfg(target_os = "windows")]
+    {
+        let response = tdlib::receive(1.0);
+        return parse_response(response);
+    }
+    
+    #[cfg(not(all(target_arch = "x86_64", target_os = "windows")))]
+    {
+        Ok(serde_json::json!({"@type": "null"}))
+    }
 }
 
 #[tauri::command]
-async fn get_me(_client_id: i32) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
-        "@type": "error",
-        "message": "tdlib not initialized"
-    }))
+async fn get_me(client_id: i32) -> Result<serde_json::Value, String> {
+    send_td_request(client_id, serde_json::json!({"@type": "getMe"})).await
 }
 
 #[tauri::command]
-async fn get_chats(_client_id: i32) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
-        "@type": "chats",
-        "chats": [],
-        "count": 0
-    }))
+async fn get_chats(client_id: i32) -> Result<serde_json::Value, String> {
+    send_td_request(client_id, serde_json::json!({
+        "@type": "getChats",
+        "offset_order": "9223372036854775807",
+        "offset_chat_id": 0,
+        "limit": 100
+    })).await
 }
 
 #[tauri::command]
 async fn send_message(
-    _client_id: i32,
-    _chat_id: i64,
-    _text: String,
+    client_id: i32,
+    chat_id: i64,
+    text: String,
 ) -> Result<serde_json::Value, String> {
-    Ok(serde_json::json!({
-        "@type": "error",
-        "message": "tdlib not initialized"
-    }))
+    let request = serde_json::json!({
+        "@type": "messages.sendMessage",
+        "chat_id": chat_id,
+        "input_message_content": {
+            "@type": "inputMessageText",
+            "text": {
+                "@type": "formattedText",
+                "text": text
+            }
+        }
+    });
+    send_td_request(client_id, request).await
 }
 
 #[tauri::command]
@@ -76,24 +147,24 @@ async fn set_tdlib_parameters(
     client_id: i32,
     api_id: i32,
     api_hash: String,
-    _device_model: String,
-    _system_version: String,
-    _application_version: String,
+    device_model: String,
+    system_version: String,
+    application_version: String,
 ) -> Result<serde_json::Value, String> {
-    info!("Setting tdlib parameters: api_id={}, api_hash={}", api_id, api_hash);
-    send_td_request(client_id, serde_json::json!({
+    let params = serde_json::json!({
         "@type": "setTdlibParameters",
         "parameters": {
             "api_id": api_id,
             "api_hash": api_hash,
-            "device_model": "Desktop",
-            "system_version": "Unknown",
-            "application_version": "0.1.0",
+            "device_model": device_model,
+            "system_version": system_version,
+            "application_version": application_version,
             "use_message_database": true,
             "use_secret_chats": true,
             "use_pfs": true
         }
-    })).await
+    });
+    send_td_request(client_id, params).await
 }
 
 #[tauri::command]
