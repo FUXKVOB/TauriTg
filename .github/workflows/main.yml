@@ -22,17 +22,15 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run build
 
-  build-tauri:
+  build-linux:
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
       - uses: dtolnay/rust-action@stable
 
       - name: Install system dependencies
@@ -51,24 +49,19 @@ jobs:
 
       - name: Download tdlib
         run: |
-          curl -sL "https://github.com/tdlib/td/releases/download/${{ env.TD_LIB_VERSION }}/tdlib-${{ env.TD_LIB_VERSION }}-Linux.tar.gz" | tar -xz
+          curl -sL "https://github.com/tdlib/td/releases/download/${{ env.TD_LIB_VERSION }}/tdlib-${{ env.TD_LIB_VERSION }}-Linux.tar.gz" -o tdlib.tar.gz
+          tar -xzf tdlib.tar.gz
           ls -la tdlib/
 
       - name: Set build environment
         run: |
           echo "TDLIB_DIR=$(pwd)/tdlib" >> $GITHUB_ENV
-          echo "TD_INCLUDE_DIR=$(pwd)/tdlib/include" >> $GITHUB_ENV
-          echo "TD_LIB_DIR=$(pwd)/tdlib/lib" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$(pwd)/tdlib/lib/pkgconfig" >> $GITHUB_ENV
-          ls "${{ env.TD_INCLUDE_DIR }}"
 
-      - name: Update Cargo.toml for tdlib-sys
+      - name: Add tdlib-sys to Cargo.toml
         run: |
-          cat >> src-tauri/Cargo.toml << 'EOF'
-
-[target.x86_64-unknown-linux-gnu.dependencies]
-tdlib-sys = { version = "0.2", features = ["pkg-config"] }
-EOF
+          echo '' >> src-tauri/Cargo.toml
+          echo '[target.x86_64-unknown-linux-gnu.dependencies]' >> src-tauri/Cargo.toml
+          echo 'tdlib-sys = { version = "0.2", features = ["pkg-config"] }' >> src-tauri/Cargo.toml
 
       - name: Install npm dependencies
         run: npm ci
@@ -77,18 +70,11 @@ EOF
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PKG_CONFIG_PATH: $(pwd)/tdlib/lib/pkgconfig
         with:
           tagName: v__VERSION__
           releaseName: 'Telegram Desktop v__VERSION__'
-          releaseBody: |
-            Telegram Desktop client built with Tauri 2, React, and tdlib.
-            
-            ## Features
-            - Telegram messaging
-            - Cross-platform (Windows, macOS, Linux)
-            
-            ## Requirements
-            You need Telegram API credentials from https://my.telegram.org
+          releaseBody: 'Telegram Desktop client built with Tauri 2, React, and tdlib.'
           releaseDraft: true
           prerelease: false
 
@@ -97,30 +83,26 @@ EOF
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
       - uses: dtolnay/rust-action@stable
 
       - name: Download tdlib for Windows
         run: |
           Invoke-WebRequest -Uri "https://github.com/tdlib/td/releases/download/${{ env.TD_LIB_VERSION }}/tdlib-${{ env.TD_LIB_VERSION }}-Windows.zip" -OutFile "tdlib.zip"
           Expand-Archive -Path "tdlib.zip" -DestinationPath "tdlib" -Force
-          Get-ChildItem -Path "tdlib"
 
       - name: Set environment
         run: |
           echo "TDLIB_DIR=$((Get-Location).Path)/tdlib" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "TD_INCLUDE_DIR=$((Get-Location).Path)/tdlib/include" | Out-File -FilePath $env:GITHUB_ENV -Append
-          echo "TD_LIB_DIR=$((Get-Location).Path)/tdlib/lib" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Update Cargo.toml for Windows
+      - name: Add tdlib-sys to Cargo.toml
         run: |
-          "@`n[target.x86_64-pc-windows-msvc.dependencies]`n" | Out-File -FilePath src-tauri/Cargo.toml -Append
-          "@`ntdblib-sys = { version = `"0.2`", features = [`"pkg-config`"] }`n" | Out-File -FilePath src-tauri/Cargo.toml -Append
+          Add-Content -Path src-tauri/Cargo.toml -Value ""
+          Add-Content -Path src-tauri/Cargo.toml -Value "[target.x86_64-pc-windows-msvc.dependencies]"
+          Add-Content -Path src-tauri/Cargo.toml -Value 'tdlib-sys = { version = "0.2", features = ["pkg-config"] }'
 
       - name: Install npm dependencies
         run: npm ci
@@ -141,34 +123,28 @@ EOF
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-
       - uses: dtolnay/rust-action@stable
         with:
           targets: aarch64-apple-darwin
 
       - name: Download tdlib for macOS
         run: |
-          curl -sL "https://github.com/tdlib/td/releases/download/${{ env.TD_LIB_VERSION }}/tdlib-${{ env.TD_LIB_VERSION }}-macOS.tar.gz" | tar -xz
-          ls -la tdlib/
+          curl -sL "https://github.com/tdlib/td/releases/download/${{ env.TD_LIB_VERSION }}/tdlib-${{ env.TD_LIB_VERSION }}-macOS.tar.gz" -o tdlib.tar.gz
+          tar -xzf tdlib.tar.gz
 
       - name: Set environment
         run: |
           echo "TDLIB_DIR=$(pwd)/tdlib" >> $GITHUB_ENV
-          echo "TD_INCLUDE_DIR=$(pwd)/tdlib/include" >> $GITHUB_ENV
-          echo "TD_LIB_DIR=$(pwd)/tdlib/lib" >> $GITHUB_ENV
 
-      - name: Update Cargo.toml for macOS
+      - name: Add tdlib-sys to Cargo.toml
         run: |
-          cat >> src-tauri/Cargo.toml << 'EOF'
-
-[target.aarch64-apple-darwin.dependencies]
-tdlib-sys = { version = "0.2", features = ["pkg-config"] }
-EOF
+          echo '' >> src-tauri/Cargo.toml
+          echo '[target.aarch64-apple-darwin.dependencies]' >> src-tauri/Cargo.toml
+          echo 'tdlib-sys = { version = "0.2", features = ["pkg-config"] }' >> src-tauri/Cargo.toml
 
       - name: Install npm dependencies
         run: npm ci
